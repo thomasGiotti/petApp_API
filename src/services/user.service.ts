@@ -1,242 +1,50 @@
-import {
-  AuthenticationError,
-  ForbiddenError,
-  ValidationError,
-} from 'apollo-server-core';
+import { omit, get } from 'lodash';
+import { FilterQuery, QueryOptions } from 'mongoose';
 import config from 'config';
-import { CookieOptions } from 'express';
-import errorHandler from '../controllers/error.controller';
-import deserializeUser from '../middleware/deserializeUser';
-import UserModel, { User } from '../models/user.model';
-import {
-  LoginInputWithPhoneNumber,
-  LoginInputWithEmail,
-} from '../schemas/user.schema';
-import { Context } from '../types/context';
+import userModel, { User } from '../models/user.model';
+import { excludedFields } from '../controllers/auth.controller';
+import { signJwt } from '../utils/jwt';
 import redisClient from '../utils/connectRedis';
-import { signJwt, verifyJwt } from '../utils/jwt';
+import { DocumentType } from '@typegoose/typegoose';
 
-const accessTokenExpiresIn = config.get<number>('accessTokenExpiresIn');
-const refreshTokenExpiresIn = config.get<number>('refreshTokenExpiresIn');
-
-const cookieOptions: CookieOptions = {
-  httpOnly: true,
-  // domain: 'localhost',
-  sameSite: 'none',
-  secure: true,
+// CreateUser service
+export const createUser = async (input: Partial<User>) => {
+  const user = await userModel.create(input);
+  return omit(user.toJSON(), excludedFields);
 };
 
-const accessTokenCookieOptions = {
-  ...cookieOptions,
-  maxAge: accessTokenExpiresIn * 60 * 1000,
-  expires: new Date(Date.now() + accessTokenExpiresIn * 60 * 1000),
+// Find User by Id
+export const findUserById = async (id: string) => {
+  const user = await userModel.findById(id).lean();
+  return omit(user, excludedFields);
 };
 
-const refreshTokenCookieOptions = {
-  ...cookieOptions,
-  maxAge: refreshTokenExpiresIn * 60 * 1000,
-  expires: new Date(Date.now() + refreshTokenExpiresIn * 60 * 1000),
+// Find All users
+export const findAllUsers = async () => {
+  return await userModel.find();
 };
 
-if (process.env.NODE_ENV === 'production') cookieOptions.secure = true;
+// Find one user by any fields
+export const findUser = async (
+  query: FilterQuery<User>,
+  options: QueryOptions = {}
+) => {
+  return await userModel.findOne(query, {}, options).select('+password');
+};
+export const signToken = async (user: DocumentType<User>) => {
+  // Sign the access token
+  const access_token = signJwt(
+    { sub: user._id },
+    {
+      expiresIn: `${config.get<number>('accessTokenExpiresIn')}m`,
+    }
+  );
 
-async function findByEmail(email: string): Promise<User | null> {
-  return UserModel.findOne({ email }).select('+password');
-}
-async function findByPhoneNumber(phoneNumber: string): Promise<User | null> {
-  return UserModel.findOne({ phoneNumber }).select('+password');
-}
-
-function signTokens(user: User) {
-  const userId: string = user._id.toString();
-  const access_token = signJwt({ userId }, 'accessTokenPrivateKey', {
-    expiresIn: `${accessTokenExpiresIn}m`,
+  // Create a Session
+  redisClient.set(user._id, JSON.stringify(user), {
+    EX: 60 * 60,
   });
 
-  const refresh_token = signJwt({ userId }, 'refreshTokenPrivateKey', {
-    expiresIn: `${refreshTokenExpiresIn}m`,
-  });
-
-  redisClient.set(userId, JSON.stringify(user), {
-    EX: refreshTokenExpiresIn * 60,
-  });
-
-  return { access_token, refresh_token };
-}
-
-export default class UserService {
-  // Register User
-  async signUpUser(input: Partial<User>) {
-    try {
-      const user = await UserModel.create(input);
-      return {
-        status: 'success',
-        user,
-      };
-    } catch (error: any) {
-      if (error.code === 11000)
-        return new ValidationError('Email already exists');
-      errorHandler(error);
-    }
-  }
-
-  // Login User with Email
-  async loginUserWithEmail(input: LoginInputWithEmail, { res }: Context) {
-    try {
-      const message = 'Invalid email or password';
-      // 1. Find user by email
-      const user = await findByEmail(input.email);
-
-      if (!user) {
-        return new AuthenticationError(message);
-      }
-
-      // 2. Compare passwords
-      if (!(await UserModel.comparePasswords(user.password, input.password))) {
-        return new AuthenticationError(message);
-      }
-
-      // 3. Sign JWT Tokens
-      const { access_token, refresh_token } = signTokens(user);
-
-      // 4. Add Tokens to Context
-      res.cookie('access_token', access_token, accessTokenCookieOptions);
-      res.cookie('refresh_token', refresh_token, refreshTokenCookieOptions);
-      res.cookie('logged_in', 'true', {
-        ...accessTokenCookieOptions,
-        httpOnly: false,
-      });
-
-      return {
-        status: 'success',
-        access_token,
-      };
-    } catch (error: any) {
-      errorHandler(error);
-    }
-  }
-  // Login User with phoneNumber
-  async loginUserWithPhoneNumber(
-    input: LoginInputWithPhoneNumber,
-    { res }: Context
-  ) {
-    try {
-      const message = 'Invalid email or password';
-      // 1. Find user by email
-      const user = await findByPhoneNumber(input.phoneNumber);
-
-      if (!user) {
-        return new AuthenticationError(message);
-      }
-
-      // 2. Compare passwords
-      if (!(await UserModel.comparePasswords(user.password, input.password))) {
-        return new AuthenticationError(message);
-      }
-
-      // 3. Sign JWT Tokens
-      const { access_token, refresh_token } = signTokens(user);
-
-      // 4. Add Tokens to Context
-      res.cookie('access_token', access_token, accessTokenCookieOptions);
-      res.cookie('refresh_token', refresh_token, refreshTokenCookieOptions);
-      res.cookie('logged_in', 'true', {
-        ...accessTokenCookieOptions,
-        httpOnly: false,
-      });
-
-      return {
-        status: 'success',
-        access_token,
-      };
-    } catch (error: any) {
-      errorHandler(error);
-    }
-  }
-  // Get Currently Logged In User
-  async getMe({ req, res, deserializeUser }: Context) {
-    try {
-      const user = await deserializeUser(req);
-      return {
-        status: 'success',
-        user,
-      };
-    } catch (error: any) {
-      errorHandler(error);
-    }
-  }
-  // Refresh Access Token
-  async refreshAccessToken({ req, res }: Context) {
-    try {
-      // Get the refresh token
-      const { refresh_token } = req.cookies;
-
-      // Validate the RefreshToken
-      const decoded = verifyJwt<{ userId: string }>(
-        refresh_token,
-        'refreshTokenPublicKey'
-      );
-
-      if (!decoded) {
-        throw new ForbiddenError('Could not refresh access token');
-      }
-
-      // Check if user's session is valid
-      const session = await redisClient.get(decoded.userId);
-
-      if (!session) {
-        throw new ForbiddenError('User session has expired');
-      }
-
-      // Check if user exist and is verified
-      const user = await UserModel.findById(JSON.parse(session)._id).select(
-        '+verified'
-      );
-
-      if (!user || !user.verified) {
-        throw new ForbiddenError('Could not refresh access token');
-      }
-
-      // Sign new access token
-      const access_token = signJwt(
-        { userId: user._id },
-        'accessTokenPrivateKey',
-        {
-          expiresIn: `${accessTokenExpiresIn}m`,
-        }
-      );
-
-      // Send access token cookie
-      res.cookie('access_token', access_token, accessTokenCookieOptions);
-      res.cookie('logged_in', 'true', {
-        ...accessTokenCookieOptions,
-        httpOnly: false,
-      });
-
-      return {
-        status: 'success',
-        access_token,
-      };
-    } catch (error) {
-      errorHandler(error);
-    }
-  }
-  // Logout User
-  async logoutUser({ req, res }: Context) {
-    try {
-      const user = await deserializeUser(req);
-
-      // Delete the user's session
-      await redisClient.del(String(user?._id));
-
-      // Logout user
-      res.cookie('access_token', '', { maxAge: -1 });
-      res.cookie('refresh_token', '', { maxAge: -1 });
-      res.cookie('logged_in', '', { maxAge: -1 });
-
-      return true;
-    } catch (error) {
-      errorHandler(error);
-    }
-  }
-}
+  // Return access token
+  return { access_token };
+};

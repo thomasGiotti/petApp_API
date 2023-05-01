@@ -8,6 +8,11 @@ import {
 } from '@typegoose/typegoose';
 import bcrypt from 'bcryptjs';
 import config from 'config';
+import { IUser } from './models_interface/IUser';
+import { EnumRole } from '../enums/role.enum';
+import { EnumGender } from '../enums/gender.enum';
+import { IPet } from './models_interface/IPet';
+import { Pet } from './pet.model';
 
 // Imports
 
@@ -30,7 +35,7 @@ import config from 'config';
   },
 })
 @index({ email: 1, phoneNumber: 1 })
-export class User {
+export class User implements IUser {
   readonly _id: string;
 
   @prop({ required: true })
@@ -42,28 +47,32 @@ export class User {
   @prop({ required: true })
   firstName: string;
 
+  @prop({ required: true })
+  gender: EnumGender;
+
+  @prop({ required: false })
+  birthDate: string;
+
   @prop({ required: true, unique: true, lowercase: true })
   email: string;
 
   @prop({ required: true, unique: true })
   phoneNumber: string;
 
-  @prop({ default: 'user' })
-  role: string;
+  @prop({ default: EnumRole.USER })
+  role: EnumRole;
 
   @prop({ required: true, select: false })
   password: string;
 
   @prop({ required: true })
   passwordConfirm: string | undefined;
-
+  @prop({ type: () => Pet })
+  pets?: Pet[];
   @prop({ default: true, select: false })
   verified: boolean;
 
-  static async comparePasswords(
-    hashedPassword: string,
-    candidatePassword: string
-  ) {
+  async comparePasswords(hashedPassword: string, candidatePassword: string) {
     return await bcrypt.compare(candidatePassword, hashedPassword);
   }
 }

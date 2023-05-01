@@ -1,54 +1,57 @@
-import { AuthenticationError, ForbiddenError } from 'apollo-server-core';
-import { Request } from 'express';
-import errorHandler from '../controllers/error.controller';
-import UserModel from '../models/user.model';
+import { NextFunction, Request, Response } from 'express';
+import { findUserById } from '../services/user.service';
+import AppError from '../utils/appError';
 import redisClient from '../utils/connectRedis';
 import { verifyJwt } from '../utils/jwt';
 
-const deserializeUser = async (req: Request) => {
+export const deserializeUser = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
   try {
-    // Get the access token
+    // Get the token
     let access_token;
     if (
       req.headers.authorization &&
       req.headers.authorization.startsWith('Bearer')
     ) {
       access_token = req.headers.authorization.split(' ')[1];
-    } else if (req.cookies?.access_token) {
-      const { access_token: token } = req.cookies;
-      access_token = token;
+    } else if (req.cookies.access_token) {
+      access_token = req.cookies.access_token;
     }
 
-    if (!access_token) throw new AuthenticationError('No access token found');
-
-    // Validate the Access token
-    const decoded = verifyJwt<{ userId: string }>(
-      access_token,
-      'accessTokenPublicKey'
-    );
-
-    if (!decoded) throw new AuthenticationError('Invalid access token');
-
-    // Check if the session is valid
-    const session = await redisClient.get(decoded.userId);
-
-    if (!session) throw new ForbiddenError('Session has expired');
-
-    // Check if user exist
-    const user = await UserModel.findById(JSON.parse(session)._id).select(
-      '+verified'
-    );
-
-    if (!user || !user.verified) {
-      throw new ForbiddenError(
-        'The user belonging to this token no logger exist'
-      );
+    if (!access_token) {
+      return next(new AppError('You are not logged in', 401));
     }
 
-    return user;
-  } catch (error: any) {
-    errorHandler(error);
+    // Validate Access Token
+    const decoded = verifyJwt<{ sub: string }>(access_token);
+
+    if (!decoded) {
+      return next(new AppError(`Invalid token or user doesn't exist`, 401));
+    }
+
+    // Check if user has a valid session
+    const session = await redisClient.get(decoded.sub);
+
+    if (!session) {
+      return next(new AppError(`User session has expired`, 401));
+    }
+
+    // Check if user still exist
+    const user = await findUserById(JSON.parse(session)._id);
+
+    if (!user) {
+      return next(new AppError(`User with that token no longer exist`, 401));
+    }
+
+    // This is really important (Helps us know if the user is logged in from other controllers)
+    // You can do: (req.user or res.locals.user)
+    res.locals.user = user;
+
+    next();
+  } catch (err: any) {
+    next(err);
   }
 };
-
-export default deserializeUser;

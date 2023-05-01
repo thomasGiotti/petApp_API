@@ -1,0 +1,8 @@
+export enum EnumRole {
+  VETERINARY = 'VETERINARY',
+  CONNOISSEUR = 'CONNOISSEUR',
+  ADMIN = 'ADMIN',
+  USER = 'USER',
+  EDUCATOR = 'EDUCATOR',
+  BREEDER = 'BREEDER',
+}
