@@ -20,8 +20,6 @@ import { IPet } from './models_interface/IPet';
 })
 @index({ id: 1 })
 export class Pet implements IPet {
-  readonly _id: string;
-
   @prop({ required: true })
   name: string;
 
@@ -31,19 +29,16 @@ export class Pet implements IPet {
   @prop({ required: true })
   birthDate: string;
 
-  @prop({ required: true })
-  dateOfBirth: Date;
+  @prop()
+  description?: string;
 
-  @prop({ required: false })
-  description: string;
-
-  @prop({ required: false })
-  rating: number;
+  @prop({ default: 5 })
+  rating?: number;
 
   @prop({ required: true })
   sex: EnumSexPet;
 
-  @prop({ default: 'undefined' })
+  @prop({ default: EnumCharacteristic.UNDEFINED })
   characteristic: EnumCharacteristic;
 }
 

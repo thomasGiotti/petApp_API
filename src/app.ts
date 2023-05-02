@@ -7,12 +7,17 @@ import cookieParser from 'cookie-parser';
 import connectDB from './utils/connectDB';
 import userRouter from './routes/user.route';
 import authRouter from './routes/auth.route';
-
+import petRouter from './routes/pet.route';
+import swaggerUi from 'swagger-ui-express';
+import swaggerJsdoc from 'swagger-jsdoc';
+import swaggerJSDoc from 'swagger-jsdoc';
+import path from 'path';
+import YAML from 'yamljs';
 const app = express();
+const swaggerDocument = require('./swagger.json');
 
 // Middleware
 
-// 1. Body Parser
 app.use(express.json({ limit: '10kb' }));
 
 // 2. Cookie Parser
@@ -30,8 +35,10 @@ app.use(
 );
 
 // 5. Routes
+app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerDocument));
 app.use('/api/users', userRouter);
 app.use('/api/auth', authRouter);
+app.use('/api/pets', petRouter);
 
 // Testing
 app.get('/healthChecker', (req: Request, res: Response, next: NextFunction) => {

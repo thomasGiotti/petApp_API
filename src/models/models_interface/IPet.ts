@@ -6,8 +6,8 @@ export interface IPet {
   name: string;
   race: EnumRace;
   birthDate: string;
-  description: string;
+  description?: string;
   sex: EnumSexPet;
-  rating: number;
+  rating?: number;
   characteristic: EnumCharacteristic;
 }

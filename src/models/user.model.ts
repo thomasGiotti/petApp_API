@@ -11,10 +11,16 @@ import config from 'config';
 import { IUser } from './models_interface/IUser';
 import { EnumRole } from '../enums/role.enum';
 import { EnumGender } from '../enums/gender.enum';
-import { IPet } from './models_interface/IPet';
 import { Pet } from './pet.model';
 
-// Imports
+/**
+ * @swagger
+ * definitions:
+ *  User:
+ *    type:object
+ *    properties:
+ *      firstName:string
+ */
 
 @pre<User>('save', async function (next) {
   if (!this.isModified('password')) return next();

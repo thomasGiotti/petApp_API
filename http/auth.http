@@ -1,0 +1,16 @@
+GET http://localhost:8000/healthChecker
+
+
+###
+POST http://localhost:8000/api/auth/register
+Content-Type:application/json
+{
+    "userName": "johndoe",
+    "firstName": "John",
+    "lastName": "Doe",
+    "email": "johndoe@mail.com",
+    "birthDate":"01/01/1990",
+    "gender":"MALE",
+    "password":"johndoe123",
+    "passwordConfirm":"johndoe123",}
+

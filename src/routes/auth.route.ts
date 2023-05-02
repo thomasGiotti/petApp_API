@@ -1,15 +1,7 @@
 import express from 'express';
-import {
-  loginEmailHandler,
-  loginPhoneNumberHandler,
-  registerHandler,
-} from '../controllers/auth.controller';
+import { loginHandler, registerHandler } from '../controllers/auth.controller';
 import { validate } from '../middleware/validate';
-import {
-  createUserSchema,
-  loginUserWithEmailSchema,
-  loginUserWithPhoneNumberSchema,
-} from '../schemas/user.schema';
+import { createUserSchema, loginUserSchema } from '../schemas/user.schema';
 
 const router = express.Router();
 
@@ -17,15 +9,6 @@ const router = express.Router();
 router.post('/register', validate(createUserSchema), registerHandler);
 
 // Login user route
-router.post(
-  '/loginWithEmail',
-  validate(loginUserWithEmailSchema),
-  loginEmailHandler
-);
-router.post(
-  '/loginWithPhoneNumber',
-  validate(loginUserWithPhoneNumberSchema),
-  loginPhoneNumberHandler
-);
+router.post('/login', validate(loginUserSchema), loginHandler);
 
 export default router;
